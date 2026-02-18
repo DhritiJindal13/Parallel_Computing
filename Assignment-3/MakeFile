@@ -1,0 +1,94 @@
+CXX      = g++
+CXXFLAGS = -std=c++17 -Wall -O3 -fopenmp
+
+# ── Source Files ──
+SOURCES  = main.cpp correlate.cpp
+HEADERS  = correlate.h
+
+# ── Three Build Targets (one per version)
+# Task 1: Sequential baseline  (VERSION=1)
+# Task 2: OpenMP parallel      (VERSION=2)
+# Task 3: Fully optimized      (VERSION=3)
+
+SEQ_TARGET = correlate_seq
+PAR_TARGET = correlate_par
+OPT_TARGET = correlate_opt
+
+SEQ_OBJS = main_seq.o correlate_seq.o
+PAR_OBJS = main_par.o correlate_par.o
+OPT_OBJS = main_opt.o correlate_opt.o
+
+# ── Default: build all three ──────────────────────────────────────────────────
+all: $(SEQ_TARGET) $(PAR_TARGET) $(OPT_TARGET)
+
+# ── Link rules ────────────────────────────────────────────────────────────────
+$(SEQ_TARGET): $(SEQ_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+$(PAR_TARGET): $(PAR_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+$(OPT_TARGET): $(OPT_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# ── Compile rules (version-specific object files) ─────────────────────────────
+main_seq.o: main.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=1 -c $< -o $@
+
+correlate_seq.o: correlate.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=1 -c $< -o $@
+
+main_par.o: main.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=2 -c $< -o $@
+
+correlate_par.o: correlate.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=2 -c $< -o $@
+
+main_opt.o: main.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=3 -c $< -o $@
+
+correlate_opt.o: correlate.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -DVERSION=3 -c $< -o $@
+
+# ── Run all three versions (small default size) ───────────────────────────────
+run: all
+	@echo "=== Sequential ==="
+	./$(SEQ_TARGET) 1000 1000
+	@echo ""
+	@echo "=== OpenMP Parallel ==="
+	./$(PAR_TARGET) 1000 1000
+	@echo ""
+	@echo "=== Optimized ==="
+	./$(OPT_TARGET) 1000 1000
+
+#  perf stat benchmarks 
+
+perf: all
+	@echo "========================================"
+	@echo " perf stat: Sequential vs Parallel (1000x1000)"
+	@echo "========================================"
+	perf stat ./$(SEQ_TARGET) 1000 1000
+	perf stat ./$(PAR_TARGET) 1000 1000
+	perf stat ./$(OPT_TARGET) 1000 1000
+	@echo ""
+	@echo "========================================"
+	@echo " perf stat: Scaling matrix size"
+	@echo "========================================"
+	perf stat ./$(OPT_TARGET) 500  500
+	perf stat ./$(OPT_TARGET) 1000 1000
+	perf stat ./$(OPT_TARGET) 2000 2000
+	@echo ""
+	@echo "========================================"
+	@echo " Thread scaling (OMP_NUM_THREADS)"
+	@echo "========================================"
+	OMP_NUM_THREADS=1  perf stat ./$(OPT_TARGET) 1000 1000
+	OMP_NUM_THREADS=2  perf stat ./$(OPT_TARGET) 1000 1000
+	OMP_NUM_THREADS=4  perf stat ./$(OPT_TARGET) 1000 1000
+	OMP_NUM_THREADS=8  perf stat ./$(OPT_TARGET) 1000 1000
+
+# ── Clean ─────────────────────────────────────────────────────────────────────
+clean:
+	rm -f $(SEQ_OBJS) $(PAR_OBJS) $(OPT_OBJS) \
+	      $(SEQ_TARGET) $(PAR_TARGET) $(OPT_TARGET)
+
+.PHONY: all run perf clean
